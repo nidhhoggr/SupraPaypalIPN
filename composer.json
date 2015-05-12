@@ -1,0 +1,31 @@
+{
+    "name": "supra/supraPaypalIPN",
+    "description": "A group of classes used to handle and process paypal ipn responses.",
+    "keywords": [psr-4],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Joseph M. Persie",
+            "email": "joseph@supraliminalsolutions.com",
+            "homepage": "http://github.com/zmijevik",
+            "role": "developer"
+        }
+    ],
+    "require": {
+        "php": "~5.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~4.6",
+        "phpunit/php-code-coverage": "~2.0",
+        "phpunit/phpunit-mock-objects": "~2.3",
+        "phpunit/phpunit-selenium": "~1.4",
+        "squizlabs/php_codesniffer": "~2.3",
+        "phpmd/phpmd": "~2.2",
+        "phpdocumentor/phpdocumentor": "~2.8"
+    },
+    "autoload": {
+        "psr-4": {
+            ""SupraPaypalIPN\\"": "src/"
+        }
+    }
+}
