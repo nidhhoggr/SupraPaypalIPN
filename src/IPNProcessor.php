@@ -6,7 +6,8 @@ abstract class IPNProcessor
 {
     protected 
         $txnErr = array(),
-        $customVars = array();
+        $customVars = array(),
+        $isDebugEnabled = false;
 
     public function __construct($transactionVars = null) 
     {
@@ -25,6 +26,13 @@ abstract class IPNProcessor
     abstract public function savePurchase();
 
     abstract public function updateSubscriberSubscription();
+
+    abstract protected function customValidateTransaction();
+
+    public function setIsDebugEnabled($is)
+    {
+        $this->isDebugEnabled = $is;
+    }
 
     public function setTransactionVars($transactionVars)
     {
@@ -53,22 +61,68 @@ abstract class IPNProcessor
         return $this->txnErr; 
     }
 
+    protected function extractCustomVars()
+    {
+        $product_info = $this->transactionVars;
+
+        $this->customVars = unserialize(base64_decode($product_info['custom']));
+    }
+
+    protected function validateTransaction() 
+    {
+        $product_info = $this->transactionVars;
+
+        $this->product = $this->getProductByItemNumber($product_info['item_number']);
+
+        $this->subscriber = $this->getSubscriber();
+        
+        if(!$this->product) 
+        {
+            $this->txnErr[] = "Product not found";
+        }
+        else if(!$this->subscriber)
+        {
+            $this->txnErr[] = "Subscriber not found";
+        }
+        else 
+        {
+            $product_price_method = $this->product->getPrice;
+
+            //validate the payment price
+            if($product_price_method() !== $product_info['mc_gross']) 
+            {
+                $this->txnErr[] = "Purchase price {$product_info['mc_gross']} does not match product price {$product_price_method()}";
+            }
+
+            //perform other user defined validation here
+            $this->customValidateTransaction();
+        }
+
+        return $this->isValidTransaction();
+    }
+
+    public function isValidTransaction()
+    {
+        return count($this->txnErr) < 1;
+    }
+
     public function identifyAndNotifySubscriber() 
     {
         $product_info = $this->transactionVars;
 
-        $this->subscriber = $this->getSubscriber();
-
-        $this->product = $this->getProductByItemNumber($product_info['item_number']);
-        
-        if(!$this->subscriber) {
-
-            var_dump($this->subscriber);
+        if(!$this->subscriber) 
+        {
             $this->notifyUnidentifiedSubscriber();
+        }
 
-        } else if(!$this->isValidTransaction()) { 
+        if(!$this->isValidTransaction()) { 
 
-            $this->notifySubscriberOfInvalidTransaction();
+            if($this->isDebugEnabled)
+            {
+                Throw new \Exception("invalid transaction with errros: " . var_export($this->getTxnErr(), true));
+            }
+
+            $this->notifyAdminOfInvalidTransaction();
 
         } else {
 
@@ -78,49 +132,8 @@ abstract class IPNProcessor
         }
     }
 
-    protected function extractCustomVars()
-    {
-        $product_info = $this->transactionVars;
 
-        $this->customVars = unserialize(base64_decode($product_info['custom']));
-    }
-
-    protected function isValidTransaction() 
-    {
-        $product_info = $this->transactionVars;
-
-        $product = $this->getProductByItemNumber($product_info['item_number']);
-
-        if(!$product) {
-
-            $this->txnErr[] = "Product not found";
-
-        } else {
-
-            $product_price_method = $product->getPrice;
-
-            //validate the payment price
-            if($product_price_method() != $product_info['mc_gross']) {
-   
-                $this->txnErr[] = "Purchase price does not match product price";
-            }
-
-            if($product_info['payment_type'] != 'instant') {
-
-                $this->txnErr[] = "Payment type must be instant";
-            }
-
-            if($product_info['payment_status'] !== "Completed" && 
-                $product_info['payment_status'] !== "Processed") {
-
-                $this->txnErr[] = "The payment status was neither completed nor processed but instead: " . $product_info['payment_status'];
-            }
-        }
-
-        return count($this->txnErr) < 1;
-    }
-
-    protected function notifySubscriberOfInvalidTransaction()
+    protected function notifyAdminOfInvalidTransaction()
     {
         $this->invalidTransactionMessage .= "\r\nFor the following reasons:\r\n\r\n";
 
@@ -129,7 +142,7 @@ abstract class IPNProcessor
             $this->invalidTransactionMessage .= "\r\n$err";
         }
 
-        $this->baseNotify($this->invalidTransactionMessage);
+        $this->baseNotify($this->invalidTransactionMessage, true);
     }
 
     protected function notifyUnidentifiedSubscriber() 
@@ -142,15 +155,15 @@ abstract class IPNProcessor
         $this->baseNotify($this->identifiedSubscriberMessage);
     }
 
-    protected function baseNotify($msg) 
+    protected function baseNotify($msg, $isAdmin = false) 
     {
-        if(!isset($this->mailer) && !property_exists($this->mailer))
+        if(!isset($this->mailer) && !property_exists($this, 'mailer'))
         {
-            Throw new RuntimeException('Must set a mailer with a mail method');
+            Throw new \RuntimeException('Must set a mailer with a mail method');
         }
 
         $mail_function = $this->mailer->mail; 
 
-        $mail_function($msg);
+        $mail_function($msg, $isAdmin);
     }
 }

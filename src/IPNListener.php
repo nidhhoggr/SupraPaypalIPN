@@ -272,6 +272,8 @@ class IPNListener
     {
         $encoded_data = 'cmd=_notify-validate';
 
+        $response = false;
+
         if ($post_data === null) { 
             // use raw POST data 
             if (!empty($_POST)) {
@@ -299,16 +301,18 @@ class IPNListener
         }
 
         if (strpos($this->response_status, '200') === false) {
-            throw new Exception("Invalid response status: ".$this->response_status);
+            throw new \Exception("Invalid response status: ".$this->response_status);
         }
         
         if (strpos($this->response, "VERIFIED") !== false) {
-            return true;
+            $response = true;
         } elseif (strpos($this->response, "INVALID") !== false) {
-            return false;
+            throw new \Exception("invalid response from PayPal.");
         } else {
-            throw new Exception("Unexpected response from PayPal.");
+            throw new \Exception("Unexpected response from PayPal.");
         }
+
+        return $response;
     }
     
     /**
